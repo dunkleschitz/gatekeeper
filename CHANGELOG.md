@@ -16,3 +16,8 @@ Initial build.
   reported and skipped.
 - Exit codes 0 approved/ok / 1 denied-or-failed / 2 usage.
 - 21 tests passing (`test_gatekeeper.py`).
+
+## v1.0.1 — 2026-10-22
+
+- README gains a Limitations section (local-only, consent-not-access-control,
+  append-only-by-convention audit, single-decider scope).

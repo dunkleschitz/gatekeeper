@@ -69,6 +69,21 @@ Names are restricted to `[A-Za-z0-9_-]` (1–64 chars); the store directory
 is created `0700`. Corrupt JSONL lines are reported and skipped, never
 fatal. Request ids are 12-hex random values (`g-` + `secrets.token_hex(6)`).
 
+## Limitations
+
+- **Local by design.** Requester and human must share the store directory.
+  This is not a networked approval service and has no push notification —
+  `wait` polls, and the human has to run `list` to see what's pending.
+- **Consent channel, not access control.** Anyone with shell access to the
+  store can decide requests; there is no approver authentication. The
+  rules (first-decision-wins, no-self-approval) are enforced in code for
+  the normal CLI path, not against an adversary editing the JSONL directly.
+- **Audit is append-only by convention.** `audit.jsonl` is tamper-evident
+  only insofar as the store itself is protected (mode `0700`); it is not
+  signed or hash-chained.
+- **One human per decision.** Escalation, quorum, and delegation rules are
+  out of scope — encode them in the agent's prompt, not here.
+
 License: TBD (maintainer approves before first publication).
 
 ## Pre-publish checklist
