@@ -36,6 +36,8 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 
+VERSION = "1.1.0"
+
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 RISKS = ("low", "medium", "high", "critical")
 STATUSES = ("pending", "approved", "denied", "expired")
@@ -346,6 +348,7 @@ def cmd_log(args):
 def build_parser():
     p = argparse.ArgumentParser(prog="gatekeeper", description=__doc__.splitlines()[0])
     p.add_argument("--dir", help="store directory (default ~/.gatekeeper or $GATEKEEPER_DIR)")
+    p.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     a = sub.add_parser("ask", help="create an approval request")
