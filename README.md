@@ -41,6 +41,8 @@ timed out, unknown id, rule violation), `2` usage error.
 Risks: `low`, `medium`, `high`, `critical`. Statuses: `pending`,
 `approved`, `denied`, `expired`. Default TTL 3600 s.
 
+`--version` prints the version and exits.
+
 ## Rules (the whole point)
 
 - **First decision wins.** Deciding an already-decided request fails with
