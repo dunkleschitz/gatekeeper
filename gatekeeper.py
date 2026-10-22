@@ -13,13 +13,15 @@ Usage:
     gatekeeper show --id g-0123456789ab
     gatekeeper approve --id g-0123456789ab --by ALICE [--note "looks fine"]
     gatekeeper deny    --id g-0123456789ab --by ALICE [--note "too broad"]
+    gatekeeper log [--actor AGENT] [--action approved] [--since 2026-10-01] [--json]
 
 Rules:
   * first-decision-wins: an already-decided request cannot be re-decided.
   * no-self-approval: the approver may not be the requester.
   * expiry: a request past its TTL becomes expired and cannot be decided;
     expiry is applied lazily on every read/write, and by `sweep`.
-  * every decision (and expiry, and ask) is appended to an audit log.
+  * every decision (and expiry, and ask) is appended to an audit log,
+    queryable with `log` (--actor/--action/--request/--since/--until/--limit/--json).
 
 Exit codes: 0 approved/ok, 1 operational failure (denied, expired, timed
 out, unknown id, rule violation), 2 usage error.
@@ -37,7 +39,9 @@ from datetime import datetime, timedelta, timezone
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 RISKS = ("low", "medium", "high", "critical")
 STATUSES = ("pending", "approved", "denied", "expired")
+LOG_ACTIONS = ("ask", "approved", "denied", "expired")
 DEFAULT_TTL = 3600
+TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?Z?)?$")
 
 
 def fail(msg, code=1):
@@ -114,6 +118,38 @@ def audit(d, actor, action, rid, detail=""):
             "request": rid,
             "detail": detail,
         }, sort_keys=True) + "\n")
+
+
+def load_audit(path):
+    """Return (audit entries list in file order, corrupt_count). Lenient:
+    any non-object JSON counts as corrupt."""
+    entries = []
+    corrupt = 0
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    e = json.loads(line)
+                    if not isinstance(e, dict):
+                        raise ValueError("not an object")
+                    entries.append(e)
+                except (json.JSONDecodeError, ValueError):
+                    corrupt += 1
+    return entries, corrupt
+
+
+def norm_ts(value, flag):
+    """Normalize --since/--until to full ISO for lexicographic compare."""
+    if not TS_RE.match(value or ""):
+        fail(f"invalid --{flag} {value!r}: use YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ", 2)
+    if "T" not in value:
+        return value + "T00:00:00Z"
+    if value.endswith("Z"):
+        return value
+    return value + "Z"
 
 
 def is_expired(r, now=None):
@@ -265,6 +301,48 @@ def cmd_sweep(args):
     return 0
 
 
+def cmd_log(args):
+    d = store_dir(args)
+    if args.limit is not None and args.limit < 0:
+        fail("--limit must be >= 0", 2)
+    since = norm_ts(args.since, "since") if args.since else None
+    until = norm_ts(args.until, "until") if args.until else None
+    if since and until and since > until:
+        fail("--since is after --until: no entry can match", 2)
+    entries, corrupt = load_audit(audit_path(d))
+    rows = []
+    for e in entries:
+        if args.actor and e.get("actor") != args.actor:
+            continue
+        if args.action and e.get("action") != args.action:
+            continue
+        if args.request and e.get("request") != args.request:
+            continue
+        ts = e.get("ts", "")
+        if since and ts < since:
+            continue
+        if until and ts > until:
+            continue
+        rows.append(e)
+    if args.limit is not None:
+        rows = rows[:args.limit]
+    if args.json:
+        for e in rows:
+            print(json.dumps(e, sort_keys=True))
+    else:
+        print(f"{'TIME':<20}{'ACTOR':<14}{'ACTION':<9}{'REQUEST':<16}DETAIL")
+        for e in rows:
+            detail = str(e.get("detail", ""))
+            if len(detail) > 60:
+                detail = detail[:59] + "…"
+            print(f"{str(e.get('ts', '')):<20}{str(e.get('actor', '')):<14}"
+                  f"{str(e.get('action', '')):<9}{str(e.get('request', '')):<16}{detail}")
+    if corrupt:
+        print(f"gatekeeper: warning: {corrupt} corrupt audit line(s) skipped",
+              file=sys.stderr)
+    return 0
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="gatekeeper", description=__doc__.splitlines()[0])
     p.add_argument("--dir", help="store directory (default ~/.gatekeeper or $GATEKEEPER_DIR)")
@@ -308,6 +386,16 @@ def build_parser():
 
     sw = sub.add_parser("sweep", help="expire overdue requests now")
     sw.set_defaults(func=cmd_sweep)
+
+    lg = sub.add_parser("log", help="query the audit log")
+    lg.add_argument("--actor", help="only entries by this actor")
+    lg.add_argument("--action", choices=LOG_ACTIONS, help="only this action")
+    lg.add_argument("--request", help="only entries for this request id")
+    lg.add_argument("--since", help="entries at/after this time (YYYY-MM-DD or ISO)")
+    lg.add_argument("--until", help="entries at/before this time (YYYY-MM-DD or ISO)")
+    lg.add_argument("--limit", type=int, help="max entries to show")
+    lg.add_argument("--json", action="store_true", help="output JSON lines")
+    lg.set_defaults(func=cmd_log)
     return p
 
 

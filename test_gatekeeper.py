@@ -194,6 +194,99 @@ class GatekeeperTest(unittest.TestCase):
         st = os.stat(self.d)
         self.assertEqual(oct(st.st_mode & 0o777), "0o700")
 
+    # --- log ---
+    def log_lines(self, *argv):
+        p = run(self.d, "log", *argv)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        return p
+
+    def test_log_lists_ask_and_decision_in_order(self):
+        rid = self.ask()
+        self.decide(rid, "alice")
+        p = self.log_lines()
+        rows = p.stdout.strip().splitlines()
+        self.assertGreaterEqual(len(rows), 3)  # header + ask + approved
+        self.assertIn("ask", rows[1])
+        self.assertIn("approved", rows[2])
+        self.assertIn(rid, p.stdout)
+
+    def test_log_filter_action(self):
+        rid1 = self.ask(requester="agent1")
+        rid2 = self.ask(requester="agent2")
+        self.decide(rid1, "alice")           # approved
+        self.decide(rid2, "bob", approve=False)  # denied
+        p = self.log_lines("--action", "denied")
+        self.assertIn(rid2, p.stdout)
+        self.assertNotIn(rid1, p.stdout)
+        self.assertNotIn("approved", p.stdout)
+
+    def test_log_filter_actor(self):
+        rid = self.ask(requester="agent1")
+        self.decide(rid, "alice")
+        p = self.log_lines("--actor", "alice")
+        self.assertIn("approved", p.stdout)
+        self.assertNotIn("ask", p.stdout.splitlines()[1:])
+        p2 = self.log_lines("--actor", "nobody")
+        self.assertEqual(len(p2.stdout.strip().splitlines()), 1)  # header only
+
+    def test_log_filter_request(self):
+        rid = self.ask()
+        self.ask()
+        p = self.log_lines("--request", rid)
+        self.assertEqual(p.stdout.count(rid), 1)
+
+    def test_log_since_until(self):
+        self.ask()
+        p = self.log_lines("--since", "2000-01-01")
+        self.assertGreater(len(p.stdout.strip().splitlines()), 1)
+        p2 = self.log_lines("--since", "2999-01-01")
+        self.assertEqual(len(p2.stdout.strip().splitlines()), 1)  # header only
+        p3 = self.log_lines("--until", "2000-01-01")
+        self.assertEqual(len(p3.stdout.strip().splitlines()), 1)
+        p4 = run(self.d, "log", "--since", "2999-01-01", "--until", "2000-01-01")
+        self.assertEqual(p4.returncode, 2)
+
+    def test_log_invalid_since(self):
+        p = run(self.d, "log", "--since", "last tuesday")
+        self.assertEqual(p.returncode, 2)
+
+    def test_log_invalid_action(self):
+        p = run(self.d, "log", "--action", "maybe")
+        self.assertEqual(p.returncode, 2)
+
+    def test_log_negative_limit(self):
+        p = run(self.d, "log", "--limit", "-1")
+        self.assertEqual(p.returncode, 2)
+
+    def test_log_limit(self):
+        for _ in range(3):
+            self.ask()
+        p = self.log_lines("--limit", "2")
+        self.assertEqual(len(p.stdout.strip().splitlines()), 3)  # header + 2
+
+    def test_log_json_parseable(self):
+        rid = self.ask()
+        self.decide(rid, "alice", note="ok")
+        p = self.log_lines("--json")
+        objs = [json.loads(l) for l in p.stdout.strip().splitlines()]
+        self.assertEqual([o["action"] for o in objs], ["ask", "approved"])
+        self.assertEqual(objs[1]["actor"], "alice")
+        self.assertEqual(objs[1]["request"], rid)
+
+    def test_log_corrupt_audit_lines_skipped(self):
+        self.ask()
+        with open(os.path.join(self.d, "audit.jsonl"), "a") as f:
+            f.write("garbage{\n")
+            f.write("42\n")
+        p = run(self.d, "log")
+        self.assertEqual(p.returncode, 0)
+        self.assertIn("corrupt", p.stderr)
+        self.assertIn("ask", p.stdout)
+
+    def test_log_empty_store(self):
+        p = self.log_lines()
+        self.assertEqual(len(p.stdout.strip().splitlines()), 1)  # header only
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

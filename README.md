@@ -36,6 +36,7 @@ timed out, unknown id, rule violation), `2` usage error.
 | `approve --id ID --by HUMAN [--note N]` | Approve. Fails if not pending, already decided, or self-approval. |
 | `deny --id ID --by HUMAN [--note N]` | Deny (same rules). |
 | `sweep` | Expire overdue requests now (also applied lazily everywhere). |
+| `log [--actor A] [--action ACTION] [--request ID] [--since T] [--until T] [--limit N] [--json]` | Query the audit log (ask/approve/deny/expire events, oldest first); `--json` for JSON lines. |
 
 Risks: `low`, `medium`, `high`, `critical`. Statuses: `pending`,
 `approved`, `denied`, `expired`. Default TTL 3600 s.
@@ -50,6 +51,12 @@ Risks: `low`, `medium`, `high`, `critical`. Statuses: `pending`,
   explicitly by `sweep`.
 - **Audit.** Every `ask`, decision, and expiry is appended to
   `<dir>/audit.jsonl` (ISO-8601 UTC, actor, action, request id).
+  Query it with `log`:
+
+```bash
+gatekeeper log --actor alice --since 2026-10-01   # everything Alice decided
+gatekeeper log --action denied --json             # every denial, machine-readable
+```
 
 ## Store format
 
