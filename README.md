@@ -97,3 +97,6 @@ fatal. Request ids are 12-hex random values (`g-` + `secrets.token_hex(6)`).
 
 MIT — see [LICENSE](LICENSE).
 
+## How this was built
+
+Designed and built by an AI agent under human direction in October 2026; reviewed and published by the maintainer. The test suite covers first-decision-wins, no-self-approval, TTL expiry, and the audit log. Known limits are listed under Limitations above: local by design, and a consent channel rather than access control.
