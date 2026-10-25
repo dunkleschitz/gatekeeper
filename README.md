@@ -93,18 +93,7 @@ fatal. Request ids are 12-hex random values (`g-` + `secrets.token_hex(6)`).
 - **One human per decision.** Escalation, quorum, and delegation rules are
   out of scope — encode them in the agent's prompt, not here.
 
-License: TBD (maintainer approves before first publication).
+## License
 
-## Pre-publish checklist
+MIT — see [LICENSE](LICENSE).
 
-Per the project charter, nothing ships publicly until the maintainer
-approves the publishing account/org and the license. Before
-first publication:
-
-1. **Secrets hygiene** — run a secrets scan over the repo and its history
-   (`gitleaks detect --source .` or `trufflehog git file://.`), resolve
-   every hit, and grep once more for obvious keys/tokens by hand.
-2. **History review** — read `git log` and the full diff end-to-end; no
-   credentials, private paths, or personal data may be committed.
-3. **License** — replace the TBD notice with the maintainer-approved
-   LICENSE file.
